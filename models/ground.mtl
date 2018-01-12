@@ -1,0 +1,23 @@
+# Blender MTL File: 'None'
+# Material Count: 2
+
+newmtl NoName,2
+Ns 0.000000
+Ka 0.000000 0.000000 0.000000
+Kd 1.000000 1.000000 1.000000
+Ks 0.200000 0.200000 0.200000
+Ke 0.000000 0.000000 0.000000
+Ni 1.000000
+d 0.996078
+illum 2
+map_Kd /home/kei/eclipse_workspace/CMSCP4/mesh_windmill/windmillbuilding_tex.bmp
+map_Bump Caligari.tga
+
+newmtl None
+Ns 0
+Ka 0.000000 0.000000 0.000000
+Kd 0.8 0.8 0.8
+Ks 0.8 0.8 0.8
+d 1
+illum 2
+map_Kd /home/kei/eclipse_workspace/CMSCP4/texture/ground0004.jpg
