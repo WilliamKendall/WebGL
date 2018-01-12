@@ -1,0 +1,382 @@
+<!DOCTYPE html>
+<html>
+<head>
+<meta charset="UTF-8">
+<title>William Kendall - Project 4</title>
+<!--<script type='text/javascript' src="dat.gui.min.js"></script> -->
+<script type='text/javascript' src="webgl-obj-loader.js"></script>
+<script type='text/javascript' src="m4.js"></script>
+<script type='text/javascript' src="floor.js"></script>
+<script type='text/javascript' src="glFunctions.js"></script>
+<script type='text/javascript' src="dat.gui.min.js"></script>
+
+
+
+<script id="3d-vertex-shader" type="x-shader/x-vertex">
+precision mediump float;
+
+uniform mat4 u_worldInverseTranspose;
+uniform mat4 u_worldViewProjection;	//view
+attribute vec4 a_position;	//vertex
+
+attribute vec2 a_texcoord;
+varying vec2 v_texcoord;
+
+attribute vec3 a_normal;
+varying vec3 v_normal;
+
+
+void main() {
+	gl_Position = u_worldViewProjection * a_position;
+
+	v_texcoord = a_texcoord;
+	v_normal = mat3(u_worldInverseTranspose) * a_normal;
+}
+</script>
+
+<script id="3d-fragment-shader" type="x-shader/x-fragment">
+	precision mediump float;
+     
+	varying vec2 v_texcoord;
+     
+	uniform sampler2D u_texture;
+
+	varying vec3 v_normal;
+
+	uniform vec3 u_reverseLightDirection;
+
+	uniform vec3 u_amb;
+		
+void main() {
+	vec3 normal = normalize(v_normal);
+	float light = dot(normal, u_reverseLightDirection);
+	gl_FragColor = texture2D(u_texture, vec2( v_texcoord.s,  v_texcoord.t));		
+	gl_FragColor.rgb *= light+ u_amb;
+	
+}
+</script>
+
+</head>
+
+<style>
+body { margin: 0; 
+overflow:hidden;
+background-color:rgb(32,32,32);}
+#canvasGL{
+background-color: pink;
+width: 100%;
+height: 100%;
+position: absolute;}
+</style>
+<!-- delete position: absolute; to have a scaled canvas -->
+
+
+
+<body onload="load();">
+<canvas id="canvasGL"  style="border:1px solid #000000;" ></canvas>
+
+
+<script type="text/javascript" >
+/*
+William Kendall
+CMSC 405
+Project 4
+*/
+
+var canvas = document.getElementById("canvasGL");
+var gl = canvas.getContext("webgl",{
+premultipliedAlpha: false,  // Ask for non-premultiplied alpha
+ alpha: false,
+});
+
+var kl;
+
+var guiParams = new function() {
+	this.fanSpeed = 1.0;
+	this.lightY = 0.1;
+	this.lightZ = 0.2;
+	
+}
+
+
+var horseGoTo = [-11.0,0.0,0.0];
+var button1 = { horseWater:function(){ horseGoTo = [10.0,0.0,15.0]; }};
+var button2 = { horseTower:function(){ horseGoTo = [-11.0,0.0,0.0]; }};
+
+	
+var gui = new dat.GUI();
+gui.add(guiParams, 'fanSpeed', 0, 5).name("Fan Speed");
+gui.add(guiParams, 'lightY', -1, 1).name("Sun Y");
+gui.add(guiParams, 'lightZ', -1, 1).name("Sun Z");
+gui.add(button1, 'horseWater').name("Water");
+gui.add(button2, 'horseTower').name("WindMill");
+
+function load()
+{
+	//gl checking
+	if(!gl)
+	{
+		return;		
+	}
+	document.addEventListener( "keydown", doKeyDown, true);
+	glInit();
+}
+
+function doKeyDown(e)
+{
+if ( e.keyCode == 87 ) {
+kl.camera[2] -=1;
+}
+
+if ( e.keyCode == 83 ) {
+kl.camera[2] +=1;
+}
+
+if ( e.keyCode == 65 ) {
+kl.camera[0] -=1;
+}
+
+if ( e.keyCode == 68 ) {
+kl.camera[0] +=1;
+}
+}
+
+var meshes = [];
+
+
+function glInit()
+{
+	//setup gl
+	kl = kgl("3d-vertex-shader", "3d-fragment-shader");
+	
+	loadMesh("ground","models/ground.obj","texture/ground0004.jpg",meshes);
+
+	loadMesh("bonsai","./models/bonsai-tree_wood.obj","texture/blkmarbl.bmp",meshes  );
+	loadMesh("bonsai","./models/bonsai-tree_soil.obj","texture/blkmarbl.bmp",meshes  );
+	loadMesh("bonsai","./models/bonsai-tree_base.obj","texture/blkmarbl.bmp",meshes  );
+	loadMesh("bonsai","./models/bonsai-tree_top.obj","texture/mrblpapr.bmp",meshes  );
+
+	loadMesh("geisha","./models/geisha_smooth.obj","texture/pruebas_geisha.jpg",meshes);
+
+	loadMesh("windmill_base","mesh_windmill/windmillbuilding.obj","mesh_windmill/windmillbuilding_tex.bmp",meshes  );
+	loadMesh("windmill_fan","mesh_windmill/wings.obj","mesh_windmill/wingswith.png",meshes  );
+
+	loadMesh("hut","models/oldhut.obj","texture/oldhut_tex.bmp",meshes);
+	
+	loadMesh("well", "models/well.obj", "texture/well_tex.bmp",meshes);
+
+	loadMesh("wall", "models/wall.obj", "texture/wall.bmp",meshes);
+
+	loadMesh("fire", "models/fireplace.obj", "texture/fireplace_tex.png",meshes);
+	loadMesh("fire", "models/fireplacestones.obj", "texture/bigrock_tex.png",meshes);
+
+	loadMesh("horse", "models/horsegreyhair.obj", "texture/horsegreyhair_texture.bmp",meshes);
+
+	// Adjust the canvas and viewport
+	resize();
+	gl.viewport(0, 0, gl.canvas.width, gl.canvas.height);
+	
+	// Run
+	animationLoop();
+
+}
+
+function resize() {
+	// Lookup the size the browser is displaying the canvas.
+	var displayWidth  = canvas.clientWidth;
+	var displayHeight = canvas.clientHeight;
+
+	// Check if the canvas is not the same size.
+	if (canvas.width  != displayWidth ||
+	canvas.height != displayHeight) {
+
+		// Make the canvas the same size
+		canvas.width  = displayWidth;
+		canvas.height = displayHeight;
+		}
+}
+
+
+var fanR =0;
+var bonsRot = 0;
+
+var horsePos = [-11.0,0.0,0.0];
+
+horseSpeed = 0.05;
+function animationLoop()
+{
+	glBegin();
+
+//calculate animation
+
+fanR+= (guiParams.fanSpeed / 100);
+if(fanR > 2*Math.PI) fanR=0;
+
+bonsRot+= 0.01;
+if(bonsRot > 2*Math.PI) bonsRot=0;
+
+
+//horse actions
+var dist = Math.sqrt( ((horseGoTo[0]-horsePos[0])*(horseGoTo[0]-horsePos[0]))+((horseGoTo[2]-horsePos[2])*(horseGoTo[2]-horsePos[2])) );
+
+
+var horseModel;
+meshes.forEach(
+	function (item, index)
+	{
+	if(item.modelName == "horse")
+{
+	if(dist > 1)
+	{
+		item.ambLight = [3,3,3];
+	}
+	else
+	{
+		item.ambLight = [0.3,0.3,0.3];
+	}
+}
+});
+
+if(dist > 1)
+{
+	if(horsePos[0] != horseGoTo[0])
+	{
+	var hx = horsePos[0] - horseGoTo[0];
+	if(hx > 0.001) hx = 1;
+	if(hx < 0.001) hx = -1;
+	horsePos[0] -= hx/(1/  horseSpeed );
+	}
+
+	if(horsePos[2] != horseGoTo[2])
+	{
+	var hz = horsePos[2] - horseGoTo[2];
+	if(hz > 0.001) hz = 1;
+	if(hz < 0.001) hz = -1;
+	horsePos[2] -= hz/( 1/ horseSpeed );
+	}
+
+}
+
+
+
+
+//draw each model
+	meshes.forEach(
+	function (item, index)
+	{
+		kl.worldMatrix = m4.xRotation(0);	//reset the matrix
+	
+	switch (item.modelName){
+		case "windmill_base": 
+			kl.worldMatrix = m4.translate(kl.worldMatrix, -10,0,0);
+			drawMesh(item);
+		break;
+		case "windmill_fan":
+			kl.worldMatrix = m4.translate(kl.worldMatrix, -10,0,0);
+			kl.worldMatrix = m4.translate(kl.worldMatrix, 0,7,0);	
+			kl.worldMatrix = m4.zRotate(kl.worldMatrix,fanR);
+			kl.worldMatrix = m4.translate(kl.worldMatrix, 0,-7,0);	
+			drawMesh(item);	
+		break;
+
+
+		case "hut":
+			kl.worldMatrix = m4.translate(kl.worldMatrix, 10,0,-15);
+			kl.worldMatrix = m4.scale(kl.worldMatrix, 2, 2,2);
+			drawMesh(item);
+		break;
+		
+		case "geisha":
+			kl.worldMatrix = m4.scale(kl.worldMatrix, 0.1, 0.1,0.1);
+			drawMesh(item);
+		break;
+
+case "bonsai":
+kl.worldMatrix = m4.translate(kl.worldMatrix, 0,3.5,.5);
+kl.worldMatrix = m4.yRotate(kl.worldMatrix,bonsRot);
+drawMesh(item);
+break;
+
+case "well":
+kl.worldMatrix = m4.translate(kl.worldMatrix, 8,0,10);
+kl.worldMatrix = m4.scale(kl.worldMatrix, 2, 2,2);
+drawMesh(item);
+break;
+
+case "wall":
+for(var wx = -40; wx <= 40; wx+=4)
+{
+kl.worldMatrix = m4.xRotation(0);
+kl.worldMatrix = m4.translate(kl.worldMatrix, wx,0,-30);
+kl.worldMatrix = m4.scale(kl.worldMatrix, 2, 2,2);
+drawMesh(item);
+}
+break;
+
+case "fire":
+kl.worldMatrix = m4.translate(kl.worldMatrix, 15,0,15);
+kl.worldMatrix = m4.scale(kl.worldMatrix, 2, 2,2);
+drawMesh(item);
+break;
+
+
+case "horse":
+kl.worldMatrix = m4.translate(kl.worldMatrix, horsePos[0],0,horsePos[2]);
+kl.worldMatrix = m4.scale(kl.worldMatrix, .5, .5,.5);
+
+var radians = Math.atan2(horseGoTo[0] - horsePos[0], horseGoTo[2] - horsePos[2]);
+kl.worldMatrix = m4.yRotate(kl.worldMatrix, radians);
+kl.worldMatrix = m4.yRotate(kl.worldMatrix, Math.PI/2);
+
+drawMesh(item);
+break;
+
+		default:
+			drawMesh(item);
+		break
+};
+
+
+	});
+	
+	requestAnimationFrame( animationLoop );
+}
+
+function glBegin()
+{
+	//size
+	resize();
+	gl.viewport(0, 0, gl.canvas.width, gl.canvas.height);
+	
+	// Clear
+	
+	gl.clearColor(0.0, 0, 0, 1.0);
+	gl.clear(gl.COLOR_BUFFER_BIT | gl.DEPTH_BUFFER_BIT);
+
+	//gl settings
+	gl.enable(gl.CULL_FACE);
+	gl.enable(gl.DEPTH_TEST);
+	gl.depthFunc(gl.LESS);
+
+	
+	// Select program
+	gl.useProgram(kl.program);
+
+	//compute matrix
+	var projectionMatrix = m4.perspective(50.0, gl.canvas.clientWidth / gl.canvas.clientHeight, 1.0, 1000.0);
+
+	
+	var cameraMatrix = m4.lookAt(kl.camera, kl.cameraTarget, kl.cameraUp);
+
+	var viewMatrix = m4.inverse(cameraMatrix);
+	
+	kl.viewProjectionMatrix = m4.multiply(projectionMatrix, viewMatrix);
+	kl.worldMatrix = m4.translation(0,0,0);
+
+}
+
+
+
+</script>
+</body>
+</html>
